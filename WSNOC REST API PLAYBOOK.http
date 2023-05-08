@@ -1,0 +1,120 @@
+
+@nfmtIP = 172.16.0.1
+@port = 8443
+@username = username
+@password = password
+
+
+### Login to nfmt/wsnoc #############################################
+
+# @name login
+POST https://{{nfmtIP}}:{{port}}/rest-gateway/rest/api/v1/auth/token
+content-type: application/json
+Authorization: basic {{username}}:{{password}}
+
+{
+    "grant_type": "client_credentials"
+}
+
+@token = {{login.response.body.$.access_token}}
+
+### logout from nfmt/wsnoc ##########################################
+
+# @name logout
+POST https://{{nfmtIP}}/rest-gateway/rest/api/v1/auth/revocation
+content-type: application/x-www-form-urlencoded
+Authorization: basic {{username}}:{{password}}
+
+token={{token}}&token_type_hint=token
+
+
+### Get current alarms:
+
+GET https://{{nfmtIP}}:8443/FaultManagement/rest/api/v2/alarms/details?pageEnd=5
+content-type: application/json
+Authorization: Bearer {{token}}
+
+
+
+### retrieve the ne list ############################################
+
+# @name nelist
+GET https://{{nfmtIP}}:{{port}}/oms1350/data/npr/nes
+Authorization: Bearer {{token}}
+
+
+### retrieve the node list ##########################################
+
+# @name nodelist
+GET https://{{nfmtIP}}:{{port}}/oms1350/data/npr/nodes
+Authorization: Bearer {{token}}
+
+
+### Alarn Kafka subscription (all alarms) ##############################################
+
+# @name kafkaSub
+POST https://{{nfmtIP}}:{{port}}/nbi-notification/api/v1/notifications/subscriptions
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "categories": [
+    {
+      "name": "NSP-FAULT"
+    }
+  ]
+}
+
+
+### send cli command to the ne via CCT###############################
+
+# @name cmd
+
+#Use nelist to retrieve below values:
+@emlDomId = 102
+@emlNeId = 264
+@Cmd = show version
+@neName = PSS1
+# @name sendCli
+POST https://{{nfmtIP}}:{{port}}/oms1350/eqm/cliRequest/processCLIRequest/{{emlDomId}}/{{emlNeId}}
+content-type: application/xml
+Authorization: Bearer {{token}}
+
+<CLIRequestCommand>
+    <neName>{{neName}}</neName>
+    <ncName>{{emlDomId}}_SNA</ncName>
+    <cliCommandText>{{Cmd}}</cliCommandText>
+</CLIRequestCommand>
+
+###  Start Supervision ##############################################
+
+# @name supervise
+@emlNeIdStart = 264
+@emlDomIdStart = 102
+PUT https://{{nfmtIP}}:{{port}}/oms1350/emlnemgr/superviseNODEs/ACTIVATING
+content-type: application/json
+Authorization: Bearer {{token}}
+
+[
+    {
+    "emlNeType":"1830PSS-PHN",
+    "id":"{{emlDomIdStart}}_{{emlNeIdStart}}"
+    }
+]
+
+###  Stop Supervision ##############################################
+
+# @name unsupervise
+@emlNeIdStop = 466
+@emlDomIdStop = 100
+
+PUT https://{{nfmtIP}}:{{port}}/oms1350/emlnemgr/superviseNODEs/DEACTIVATING
+content-type: application/json
+Authorization: Bearer {{token}}
+
+[
+    {
+    "emlNeType":"1830PSS-PHN",
+    "id":"{{emlDomIdStop}}_{{emlNeIdStop}}"
+    }
+]
